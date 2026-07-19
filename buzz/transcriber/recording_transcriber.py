@@ -105,18 +105,22 @@ class RecordingTranscriber(QObject):
                 channels=1,
                 callback=self.stream_callback,
             ):
-                while self.is_running:
-                    if self.queue.size >= self.n_batch_samples:
-                        self.mutex.acquire()
-                        cut = self.find_silence_cut_point(
-                            self.queue[:self.n_batch_samples], self.sample_rate,
-                        )
-                        samples = self.queue[:cut]
-                        if self.transcriber_mode == RecordingTranscriberMode.APPEND_AND_CORRECT:
-                            self.queue = self.queue[cut - keep_samples:]
-                        else:
-                            self.queue = self.queue[cut:]
-                        self.mutex.release()
+                while self.is_running or self.queue.size > 0:
+                    if self.queue.size >= self.n_batch_samples or (not self.is_running and self.queue.size > 0):
+                        with self.mutex:
+                            samples_to_process = self.queue[:self.n_batch_samples]
+
+                            cut = self.find_silence_cut_point(
+                                samples_to_process,
+                                self.sample_rate,
+                            )
+
+                            samples = samples_to_process[:cut]
+
+                            if self.transcriber_mode == RecordingTranscriberMode.APPEND_AND_CORRECT:
+                                self.queue = self.queue[cut - keep_samples:]
+                            else:
+                                self.queue = self.queue[cut:]
 
                         amplitude = self.amplitude(samples)
                         self.average_amplitude_changed.emit(amplitude)
