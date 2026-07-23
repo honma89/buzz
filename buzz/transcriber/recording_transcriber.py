@@ -117,7 +117,10 @@ class RecordingTranscriber(QObject):
 
                             samples = samples_to_process[:cut]
 
-                            if self.transcriber_mode == RecordingTranscriberMode.APPEND_AND_CORRECT:
+                            if (
+                                self.transcriber_mode == RecordingTranscriberMode.APPEND_AND_CORRECT
+                                and self.is_running
+                            ):
                                 self.queue = self.queue[cut - keep_samples:]
                             else:
                                 self.queue = self.queue[cut:]
@@ -395,6 +398,9 @@ class RecordingTranscriber(QObject):
 
         amplitude = self.amplitude(chunk)
         self.amplitude_changed.emit(amplitude)
+
+        if not self.is_running:
+            return
 
         with self.mutex:
             if self.queue.size < self.max_queue_size:

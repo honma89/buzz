@@ -257,6 +257,9 @@ class TestStreamCallback:
                 sounddevice=MockSoundDevice(),
             )
 
+            # Callback only enqueues while recording is active
+            transcriber.is_running = True
+
             # Create test audio data
             in_data = np.array([[0.1], [0.2], [0.3], [0.4]], dtype=np.float32)
 
@@ -310,6 +313,9 @@ class TestStreamCallback:
                 sounddevice=MockSoundDevice(),
             )
 
+            # Callback only runs while recording is active
+            transcriber.is_running = True
+
             # Fill the queue beyond max_queue_size
             transcriber.queue = np.ones(transcriber.max_queue_size, dtype=np.float32)
             initial_size = transcriber.queue.size
@@ -319,6 +325,33 @@ class TestStreamCallback:
             transcriber.stream_callback(in_data, 2, None, None)
 
             # Queue should not have grown (data was dropped)
+            assert transcriber.queue.size == initial_size
+
+    def test_stream_callback_drops_data_when_not_running(self):
+        transcription_options = TranscriptionOptions(
+            model=TranscriptionModel(model_type=ModelType.WHISPER_CPP),
+            language="en",
+            task=Task.TRANSCRIBE,
+        )
+
+        with patch("sounddevice.check_input_settings"):
+            transcriber = RecordingTranscriber(
+                transcription_options=transcription_options,
+                input_device_index=0,
+                sample_rate=16000,
+                model_path="/fake/path",
+                sounddevice=MockSoundDevice(),
+            )
+
+            # Recording has stopped; the input stream may still be open and fire
+            # the callback while the queue is draining. No new audio must be
+            # enqueued, otherwise the drain loop could never empty the queue.
+            transcriber.is_running = False
+
+            initial_size = transcriber.queue.size
+            in_data = np.array([[0.1], [0.2], [0.3], [0.4]], dtype=np.float32)
+            transcriber.stream_callback(in_data, 4, None, None)
+
             assert transcriber.queue.size == initial_size
 
 

@@ -94,13 +94,24 @@ class TestStreamCallback:
 
     def test_appends_to_queue_when_not_full(self):
         t = make_transcriber()
+        t.is_running = True  # callback only enqueues while recording is active
         initial_size = t.queue.size
         chunk = np.ones((100,), dtype=np.float32)
         t.stream_callback(chunk.reshape(-1, 1), 100, None, None)
         assert t.queue.size == initial_size + 100
 
+    def test_does_not_enqueue_when_not_running(self):
+        t = make_transcriber()
+        t.is_running = False
+        initial_size = t.queue.size
+        chunk = np.ones((100,), dtype=np.float32)
+        t.stream_callback(chunk.reshape(-1, 1), 100, None, None)
+        # No audio is queued after recording stops, so the drain loop can finish
+        assert t.queue.size == initial_size
+
     def test_drops_chunk_when_queue_full(self):
         t = make_transcriber()
+        t.is_running = True
         # Fill the queue to max capacity
         t.queue = np.ones(t.max_queue_size, dtype=np.float32)
         size_before = t.queue.size
@@ -112,6 +123,7 @@ class TestStreamCallback:
 
     def test_thread_safety_with_concurrent_callbacks(self):
         t = make_transcriber()
+        t.is_running = True
         errors = []
 
         def callback():
